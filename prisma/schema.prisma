@@ -1,0 +1,113 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String    @id @default(uuid())
+  clerkUserId     String    @unique
+  email           String    @unique
+  name            String?
+  imageUrl        String?
+  
+  // --- CREDITS & PLAN SYSTEM ---
+  interviewCredits   Int    @default(3)  // Free Tier Default
+  coverLetterCredits Int    @default(5)
+  roadmapCredits     Int    @default(8)
+  
+  plan               String @default("free") // "free", "monthly_399", "yearly_799"
+  // -----------------------------
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  resumes         Resume[]
+  coverLetters    CoverLetter[]
+  interviews      MockInterview[]
+  roadmaps        Roadmap[]
+  transactions    Transaction[]
+}
+
+model Resume {
+  id           String   @id @default(uuid())
+  title        String
+  userEmail    String?
+  userId       String
+  user         User     @relation(fields: [userId], references: [clerkUserId], onDelete: Cascade)
+  personalInfo String?  @db.Text
+  experience   String?  @db.Text
+  education    String?  @db.Text
+  skills       String?  @db.Text
+  summary      String?  @db.Text
+  themeColor   String   @default("#000000")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model CoverLetter {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [clerkUserId], onDelete: Cascade)
+  jobTitle         String
+  companyName      String
+  jobDescription   String?  @db.Text
+  generatedContent String   @db.Text
+  status           String   @default("draft")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model MockInterview {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [clerkUserId], onDelete: Cascade)
+  jobPosition   String
+  jobDesc       String
+  jobExperience String
+  jsonMockResp  String   @db.Text
+  status        String   @default("in-progress") 
+  createdAt     DateTime @default(now())
+  userAnswers   UserAnswer[]
+}
+
+model UserAnswer {
+  id            String        @id @default(uuid())
+  mockIdRef     String
+  mockInterview MockInterview @relation(fields: [mockIdRef], references: [id], onDelete: Cascade)
+  question      String
+  correctAnswer String?       @db.Text
+  userAnswer    String?       @db.Text
+  feedback      String?       @db.Text
+  rating        Int?
+  createdAt     DateTime      @default(now())
+}
+
+model Roadmap {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [clerkUserId], onDelete: Cascade)
+  targetRole     String
+  currentSkills  String
+  roadmapContent String   @db.Text 
+  status         String   @default("active")
+  createdAt      DateTime @default(now())
+}
+
+// Transaction History Log
+model Transaction {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [clerkUserId])
+  amount    Int
+  credits   Json     // Stored as { interview: 6, coverLetter: 10... }
+  paymentId String
+  planType  String   // The plan purchased
+  createdAt DateTime @default(now())
+}
