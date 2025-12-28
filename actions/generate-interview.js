@@ -43,7 +43,7 @@ export async function generateInterviewQuestions(data) {
     // STRICTLY using 2.5 Flash as requested
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    // --- YOUR EXACT PROMPT (UNCHANGED) ---
+  
     const prompt = `
       Role: You are a Hiring Manager at a top-tier tech company.
       
