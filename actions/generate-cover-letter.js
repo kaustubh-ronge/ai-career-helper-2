@@ -5,18 +5,26 @@ import { checkUser } from "@/lib/checkUser";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { revalidatePath } from "next/cache";
 
+// --- HELPER: ROBUST HTML CLEANER ---
+// Ensures we strip away any markdown wrappers or conversational intro/outro.
+const cleanAIResponse = (text) => {
+  // 1. Remove markdown code blocks (e.g., ```html ... ```)
+  let clean = text.replace(/```(?:html)?|```/g, "");
+  
+  // 2. Trim extra whitespace
+  return clean.trim();
+};
+
 export async function generateCoverLetter(data) {
   try {
     const user = await checkUser();
     if (!user) throw new Error("User authentication failed.");
 
-    // 1. Check Credits
+    // 1. Check Credits (Correct Field: coverLetterCredits)
     const dbUser = await db.user.findUnique({ where: { clerkUserId: user.clerkUserId } });
     
-    // Handle potential field naming differences in your schema
-    const credits = dbUser.creditsCoverLetter ?? dbUser.coverLetterCredits ?? 0;
-    
-    if (credits <= 0) {
+    // Safety check for credits
+    if ((dbUser.coverLetterCredits || 0) <= 0) {
         return { success: false, error: "Insufficient Cover Letter Credits. Please upgrade." };
     }
 
@@ -24,9 +32,10 @@ export async function generateCoverLetter(data) {
     const { companyName, jobTitle, jobDescription, resumeText } = data;
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
-    // Use stable model
+    // STRICTLY using 2.5 Flash as requested
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
+    // --- YOUR EXACT PROMPT (UNCHANGED) ---
     const prompt = `
       Role: Expert Career Coach & Professional Copywriter.
       Task: Write a highly persuasive, human-sounding cover letter.
@@ -52,14 +61,12 @@ export async function generateCoverLetter(data) {
     `;
 
     const result = await model.generateContent(prompt);
+    const rawText = result.response.text();
     
-    // Clean up potential markdown or wrapper text
-    const cleanContent = result.response.text()
-        .replace(/```html/g, "")
-        .replace(/```/g, "")
-        .trim();
+    // 3. Apply Robust Cleaning
+    const cleanContent = cleanAIResponse(rawText);
 
-    // 3. Save & Deduct
+    // 4. Save to DB
     const letter = await db.coverLetter.create({
       data: {
         userId: user.clerkUserId,
@@ -71,14 +78,10 @@ export async function generateCoverLetter(data) {
       }
     });
 
-    // Determine correct field name for decrement
-    const updateData = dbUser.creditsCoverLetter !== undefined 
-        ? { creditsCoverLetter: { decrement: 1 } }
-        : { coverLetterCredits: { decrement: 1 } };
-
+    // 5. Deduct Credit (Correct Field: coverLetterCredits)
     await db.user.update({
         where: { clerkUserId: user.clerkUserId },
-        data: updateData
+        data: { coverLetterCredits: { decrement: 1 } }
     });
 
     revalidatePath("/dashboard/cover-letter");

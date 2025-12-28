@@ -5,18 +5,34 @@ import { checkUser } from "@/lib/checkUser";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { revalidatePath } from "next/cache";
 
+// --- HELPER: ROBUST JSON CLEANER ---
+// Ensures we extract ONLY the JSON object, ignoring any intro/outro text.
+const cleanAIResponse = (text) => {
+  // 1. Remove markdown code blocks
+  let clean = text.replace(/```(?:json)?|```/g, "");
+  
+  // 2. Find the start "{" and end "}" of the JSON object
+  const firstBrace = clean.indexOf("{");
+  const lastBrace = clean.lastIndexOf("}");
+  
+  // 3. Extract strictly the JSON part
+  if (firstBrace !== -1 && lastBrace !== -1) {
+    clean = clean.substring(firstBrace, lastBrace + 1);
+  }
+  
+  return clean.trim();
+};
+
 export async function generateRoadmap(data) {
   try {
     const user = await checkUser();
     if (!user) throw new Error("User authentication failed.");
 
-    // 1. Check Credits
-    // Verify the field name in your Prisma schema (e.g., roadmapCredits vs creditsRoadmap)
+    // 1. Check Credits (Correct Field: roadmapCredits)
     const dbUser = await db.user.findUnique({ where: { clerkUserId: user.clerkUserId } });
     
-    // Check if the user has credits (handle naming variations)
-    const credits = dbUser.creditsRoadmap ?? dbUser.roadmapCredits ?? 0;
-    if (credits <= 0) {
+    // Safety check for credits
+    if ((dbUser.roadmapCredits || 0) <= 0) {
         return { success: false, error: "Insufficient Roadmap Credits. Please upgrade." };
     }
 
@@ -24,9 +40,10 @@ export async function generateRoadmap(data) {
     const { targetRole, currentSkills } = data;
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
-    // Use a stable model version
+    // STRICTLY using 2.5 Flash as requested
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
+    // --- YOUR EXACT PROMPT (UNCHANGED) ---
     const prompt = `
       Role: Expert Career Counselor & Technical Lead.
       Task: Create a step-by-step learning roadmap to go from "${currentSkills}" to "${targetRole}".
@@ -58,22 +75,19 @@ export async function generateRoadmap(data) {
     `;
     
     const result = await model.generateContent(prompt);
+    const rawText = result.response.text();
+
+    // 3. Apply Robust Cleaning
+    const cleanJson = cleanAIResponse(rawText);
     
-    // Clean up potential markdown from AI response
-    const cleanJson = result.response.text()
-        .replace(/```json/g, "")
-        .replace(/```/g, "")
-        .trim();
-    
-    // VALIDATION STEP: Verify it is valid JSON before saving
-    // This protects your frontend from crashing later
+    // 4. Validate JSON (Catches errors before DB save)
     try {
         JSON.parse(cleanJson);
     } catch (e) {
         throw new Error("AI generated invalid data format. Please try again.");
     }
 
-    // 3. Save & Deduct
+    // 5. Save to DB
     const roadmap = await db.roadmap.create({
       data: {
         userId: user.clerkUserId,
@@ -84,15 +98,10 @@ export async function generateRoadmap(data) {
       }
     });
 
-    // Determine correct field name for decrement
-    // NOTE: Check your schema.prisma to be sure if it's 'roadmapCredits' or 'creditsRoadmap'
-    const updateData = dbUser.creditsRoadmap !== undefined 
-        ? { creditsRoadmap: { decrement: 1 } }
-        : { roadmapCredits: { decrement: 1 } };
-
+    // 6. Deduct Credit (Correct Field: roadmapCredits)
     await db.user.update({
         where: { clerkUserId: user.clerkUserId },
-        data: updateData
+        data: { roadmapCredits: { decrement: 1 } }
     });
 
     revalidatePath("/dashboard/roadmap");

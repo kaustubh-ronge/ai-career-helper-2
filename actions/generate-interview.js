@@ -5,16 +5,34 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { checkUser } from "@/lib/checkUser";
 import { revalidatePath } from "next/cache";
 
+// --- HELPER: ROBUST JSON CLEANER ---
+// This ensures we extract ONLY the JSON array, ignoring any intro/outro text.
+const cleanAIResponse = (text) => {
+  // 1. Remove markdown code blocks
+  let clean = text.replace(/```(?:json)?|```/g, "");
+  
+  // 2. Find the start "[" and end "]" of the JSON array
+  const firstBracket = clean.indexOf("[");
+  const lastBracket = clean.lastIndexOf("]");
+  
+  // 3. Extract strictly the JSON part
+  if (firstBracket !== -1 && lastBracket !== -1) {
+    clean = clean.substring(firstBracket, lastBracket + 1);
+  }
+  
+  return clean.trim();
+};
+
 export async function generateInterviewQuestions(data) {
   try {
     const user = await checkUser();
     if (!user) throw new Error("User authentication failed.");
 
-    // 1. Check Credits (Ensure field name matches your Schema exactly, e.g., creditsInterview)
+    // 1. Check Credits (Correct Field: interviewCredits)
     const dbUser = await db.user.findUnique({ where: { clerkUserId: user.clerkUserId } });
     
-    // Check if you use 'interviewCredits' or 'creditsInterview' in your Prisma schema
-    if ((dbUser.creditsInterview || dbUser.interviewCredits || 0) <= 0) {
+    // Safety check for credits
+    if ((dbUser.interviewCredits || 0) <= 0) {
         return { success: false, error: "Insufficient Interview Credits. Please upgrade." };
     }
 
@@ -22,9 +40,10 @@ export async function generateInterviewQuestions(data) {
     const { jobPosition, jobDesc, jobExperience, techStack, difficulty } = data;
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     
+    // STRICTLY using 2.5 Flash as requested
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-    // UPDATED PROMPT: Explicit instructions for JSON format
+    // --- YOUR EXACT PROMPT (UNCHANGED) ---
     const prompt = `
       Role: You are a Hiring Manager at a top-tier tech company.
       
@@ -57,18 +76,15 @@ export async function generateInterviewQuestions(data) {
     `;
     
     const result = await model.generateContent(prompt);
-    
-    // Clean up if Gemini still adds markdown
-    const cleanJson = result.response.text()
-        .replace(/```json/g, "")
-        .replace(/```/g, "")
-        .trim();
+    const rawText = result.response.text();
 
-    // Verify it is valid JSON before saving
-    // This will throw an error here (caught by catch block) instead of saving bad data
+    // 3. Apply Robust Cleaning
+    const cleanJson = cleanAIResponse(rawText);
+
+    // 4. Validate JSON (Catches errors before DB save)
     JSON.parse(cleanJson); 
 
-    // 3. Save & Deduct
+    // 5. Save to DB
     const mockInterview = await db.mockInterview.create({
       data: {
         userId: user.clerkUserId,
@@ -80,10 +96,10 @@ export async function generateInterviewQuestions(data) {
       },
     });
 
+    // 6. Deduct Credit (Correct Field: interviewCredits)
     await db.user.update({
         where: { clerkUserId: user.clerkUserId },
-        // Ensure this field name matches your Prisma Schema
-        data: { creditsInterview: { decrement: 1 } } 
+        data: { interviewCredits: { decrement: 1 } } 
     });
 
     revalidatePath("/dashboard/interview");
@@ -91,6 +107,7 @@ export async function generateInterviewQuestions(data) {
 
   } catch (error) {
     console.error("Error generating interview:", error);
-    return { success: false, error: error.message || "Failed to generate questions" };
+    // Return a clean error message to the frontend
+    return { success: false, error: error.message || "Failed to generate questions. Please try again." };
   }
 }
