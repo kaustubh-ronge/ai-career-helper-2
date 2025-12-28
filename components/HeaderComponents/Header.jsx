@@ -4,8 +4,8 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence, useScroll, useMotionValueEvent } from "framer-motion";
-import { Menu, X, LayoutDashboard, FileText, PenTool, Mic2, Sparkles, Map, Crown } from "lucide-react";
-import { UserButton, SignedIn, SignedOut } from "@clerk/nextjs"; 
+import { Menu, X, LayoutDashboard, FileText, PenTool, Mic2, Sparkles, Map, Crown, LogOut } from "lucide-react";
+import { UserButton, SignedIn, SignedOut, useClerk } from "@clerk/nextjs"; 
 import { Button } from "@/components/ui/button";
 
 export const Header = ({ userCredits }) => {
@@ -13,6 +13,7 @@ export const Header = ({ userCredits }) => {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  const { signOut } = useClerk();
 
   useMotionValueEvent(scrollY, "change", (latest) => {
     setScrolled(latest > 20);
@@ -95,69 +96,138 @@ export const Header = ({ userCredits }) => {
           </SignedIn>
         </div>
 
-        {/* Mobile Toggle */}
-        <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden p-2 text-white bg-white/5 rounded-lg border border-white/10">
-          {mobileMenuOpen ? <X /> : <Menu />}
+        {/* Mobile Toggle Button */}
+        <button 
+          onClick={() => setMobileMenuOpen(true)} 
+          className="md:hidden p-2 text-white bg-white/5 rounded-lg border border-white/10 active:scale-95 transition-transform"
+        >
+          <Menu className="w-5 h-5" />
         </button>
       </div>
       
-      {/* Mobile Menu */}
+      {/* =============================================
+        MOBILE SIDE DRAWER IMPLEMENTATION
+        =============================================
+      */}
       <AnimatePresence>
         {mobileMenuOpen && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="md:hidden bg-black/95 backdrop-blur-xl border-b border-white/10 overflow-hidden">
-             <div className="p-4 space-y-2">
-                {navItems.map((item) => (
-                   <Link key={item.name} href={item.href} onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 p-3 text-slate-300 hover:bg-white/5 rounded-lg">
-                      <item.icon className="w-5 h-5 text-indigo-500" /> {item.name}
-                   </Link>
-                ))}
-                
-                <div className="pt-4 mt-4 border-t border-white/10 flex flex-col gap-3">
-                   
-                   {/* MOBILE: SIGNED OUT */}
-                   <SignedOut>
-                      <Link href="/sign-in" className="flex justify-center items-center py-3 text-slate-300 hover:text-white bg-white/5 rounded-lg font-medium transition-colors">
-                        Log In
-                      </Link>
-                      <Link href="/sign-up" className="flex justify-center items-center py-3 bg-white text-black font-bold rounded-lg hover:bg-slate-200 transition-colors">
-                        Get Started
-                      </Link>
-                   </SignedOut>
+          <>
+            {/* Backdrop - Closes menu on click */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMobileMenuOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 md:hidden"
+            />
 
-                   {/* MOBILE: SIGNED IN */}
+            {/* Sliding Drawer */}
+            <motion.div 
+              initial={{ x: "100%" }} 
+              animate={{ x: 0 }} 
+              exit={{ x: "100%" }} 
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="fixed top-0 right-0 bottom-0 w-[85%] sm:w-[60%] bg-[#0F1117] border-l border-white/10 z-50 shadow-2xl md:hidden flex flex-col"
+            >
+              {/* Drawer Header */}
+              <div className="p-5 flex items-center justify-between border-b border-white/5">
+                <span className="font-bold text-lg text-white">Menu</span>
+                <button 
+                  onClick={() => setMobileMenuOpen(false)} 
+                  className="p-2 text-slate-400 hover:text-white bg-white/5 rounded-lg border border-white/5"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-6">
+                
+                {/* Navigation Links */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Navigation</h3>
+                  {navItems.map((item) => {
+                     const isActive = pathname.startsWith(item.href);
+                     return (
+                        <Link 
+                          key={item.name} 
+                          href={item.href} 
+                          onClick={() => setMobileMenuOpen(false)} 
+                          className={`flex items-center gap-3 p-3 rounded-xl transition-all ${
+                            isActive 
+                              ? "bg-indigo-600/10 text-indigo-400 border border-indigo-500/20" 
+                              : "text-slate-300 hover:bg-white/5 border border-transparent"
+                          }`}
+                        >
+                          <item.icon className={`w-5 h-5 ${isActive ? "text-indigo-400" : "text-slate-500"}`} /> 
+                          {item.name}
+                        </Link>
+                     )
+                  })}
+                </div>
+
+                {/* User Section */}
+                <div className="pt-4 border-t border-white/5">
                    <SignedIn>
+                      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Account</h3>
+                      
                       {/* Mobile Credits Grid */}
                       {userCredits && (
-                         <div className="grid grid-cols-3 gap-2 mb-2">
-                            <div className="bg-white/5 p-2 rounded text-center border border-white/5">
-                               <span className="block text-[10px] text-slate-500 uppercase tracking-wider">Int</span>
-                               <span className="text-emerald-400 font-bold text-sm">{userCredits.interviewCredits}</span>
-                            </div>
-                            <div className="bg-white/5 p-2 rounded text-center border border-white/5">
-                               <span className="block text-[10px] text-slate-500 uppercase tracking-wider">Cov</span>
-                               <span className="text-purple-400 font-bold text-sm">{userCredits.coverLetterCredits}</span>
-                            </div>
-                            <div className="bg-white/5 p-2 rounded text-center border border-white/5">
-                               <span className="block text-[10px] text-slate-500 uppercase tracking-wider">Map</span>
-                               <span className="text-cyan-400 font-bold text-sm">{userCredits.roadmapCredits}</span>
-                            </div>
-                         </div>
+                        <div className="grid grid-cols-3 gap-2 mb-4">
+                           <div className="bg-emerald-500/5 p-3 rounded-xl text-center border border-emerald-500/10">
+                              <span className="block text-[10px] text-emerald-300/70 uppercase tracking-wider mb-1">Int</span>
+                              <span className="text-emerald-400 font-bold text-sm">{userCredits.interviewCredits}</span>
+                           </div>
+                           <div className="bg-purple-500/5 p-3 rounded-xl text-center border border-purple-500/10">
+                              <span className="block text-[10px] text-purple-300/70 uppercase tracking-wider mb-1">Cov</span>
+                              <span className="text-purple-400 font-bold text-sm">{userCredits.coverLetterCredits}</span>
+                           </div>
+                           <div className="bg-cyan-500/5 p-3 rounded-xl text-center border border-cyan-500/10">
+                              <span className="block text-[10px] text-cyan-300/70 uppercase tracking-wider mb-1">Map</span>
+                              <span className="text-cyan-400 font-bold text-sm">{userCredits.roadmapCredits}</span>
+                           </div>
+                        </div>
                       )}
                       
-                      <Link href="/dashboard/upgrade" onClick={() => setMobileMenuOpen(false)} className="flex justify-center items-center gap-2 py-3 bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-amber-400 border border-amber-500/20 rounded-lg font-bold">
+                      <Link 
+                        href="/dashboard/upgrade" 
+                        onClick={() => setMobileMenuOpen(false)} 
+                        className="flex justify-center items-center gap-2 py-3 w-full bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-amber-400 border border-amber-500/20 rounded-xl font-bold mb-3"
+                      >
                          <Crown className="w-4 h-4" /> Upgrade Plan
                       </Link>
-                      
-                      {/* User Button Row */}
-                      <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 mt-2">
-                        <span className="text-sm text-slate-300 font-medium">Manage Account</span>
+
+                      <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5">
                         <UserButton afterSignOutUrl="/" />
+                        <div className="flex flex-col">
+                           <span className="text-sm font-medium text-white">Manage Profile</span>
+                           <span className="text-xs text-slate-500">Account settings</span>
+                        </div>
                       </div>
                    </SignedIn>
 
+                   <SignedOut>
+                      <div className="flex flex-col gap-3">
+                        <Link 
+                          href="/sign-in" 
+                          onClick={() => setMobileMenuOpen(false)} 
+                          className="flex justify-center items-center py-3 text-slate-300 hover:text-white bg-white/5 rounded-xl font-medium border border-white/5"
+                        >
+                          Log In
+                        </Link>
+                        <Link 
+                          href="/sign-up" 
+                          onClick={() => setMobileMenuOpen(false)} 
+                          className="flex justify-center items-center py-3 bg-white text-black font-bold rounded-xl hover:bg-slate-200"
+                        >
+                          Get Started
+                        </Link>
+                      </div>
+                   </SignedOut>
                 </div>
-             </div>
-          </motion.div>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
     </motion.header>
