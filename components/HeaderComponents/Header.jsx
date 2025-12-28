@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence, useScroll, useMotionValueEvent } from "framer-motion";
-import { Menu, X, LayoutDashboard, FileText, PenTool, Mic2, Sparkles, Map, Crown, Zap } from "lucide-react";
+import { Menu, X, LayoutDashboard, FileText, PenTool, Mic2, Sparkles, Map, Crown } from "lucide-react";
 import { UserButton, SignedIn, SignedOut } from "@clerk/nextjs"; 
 import { Button } from "@/components/ui/button";
 
@@ -34,6 +34,7 @@ export const Header = ({ userCredits }) => {
     >
       <div className="container mx-auto px-4 md:px-6 flex items-center justify-between">
         
+        {/* Logo */}
         <Link href="/" className="flex items-center gap-3 group relative z-50">
           <div className="relative w-9 h-9 flex items-center justify-center bg-gradient-to-tr from-indigo-600 to-purple-500 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(99,102,241,0.5)]">
              <div className="absolute inset-0 bg-white/30 rotate-45 translate-y-full group-hover:translate-y-[-150%] transition-transform duration-700 ease-in-out" />
@@ -44,6 +45,7 @@ export const Header = ({ userCredits }) => {
           </span>
         </Link>
 
+        {/* Desktop Nav */}
         <nav className="hidden lg:flex items-center gap-1 p-1">
           {navItems.map((item) => {
             const isActive = pathname.startsWith(item.href);
@@ -58,6 +60,7 @@ export const Header = ({ userCredits }) => {
           })}
         </nav>
 
+        {/* Desktop Actions */}
         <div className="hidden md:flex items-center gap-4">
           <SignedOut>
             <Link href="/sign-in" className="text-slate-300 hover:text-white text-sm font-medium">Log In</Link>
@@ -92,27 +95,66 @@ export const Header = ({ userCredits }) => {
           </SignedIn>
         </div>
 
+        {/* Mobile Toggle */}
         <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden p-2 text-white bg-white/5 rounded-lg border border-white/10">
           {mobileMenuOpen ? <X /> : <Menu />}
         </button>
       </div>
       
+      {/* Mobile Menu */}
       <AnimatePresence>
         {mobileMenuOpen && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="md:hidden bg-black/95 border-b border-white/10">
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="md:hidden bg-black/95 backdrop-blur-xl border-b border-white/10 overflow-hidden">
              <div className="p-4 space-y-2">
                 {navItems.map((item) => (
                    <Link key={item.name} href={item.href} onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 p-3 text-slate-300 hover:bg-white/5 rounded-lg">
                       <item.icon className="w-5 h-5 text-indigo-500" /> {item.name}
                    </Link>
                 ))}
-                <div className="pt-4 border-t border-white/10">
+                
+                <div className="pt-4 mt-4 border-t border-white/10 flex flex-col gap-3">
+                   
+                   {/* MOBILE: SIGNED OUT */}
+                   <SignedOut>
+                      <Link href="/sign-in" className="flex justify-center items-center py-3 text-slate-300 hover:text-white bg-white/5 rounded-lg font-medium transition-colors">
+                        Log In
+                      </Link>
+                      <Link href="/sign-up" className="flex justify-center items-center py-3 bg-white text-black font-bold rounded-lg hover:bg-slate-200 transition-colors">
+                        Get Started
+                      </Link>
+                   </SignedOut>
+
+                   {/* MOBILE: SIGNED IN */}
                    <SignedIn>
-                      <Link href="/dashboard/upgrade" className="flex justify-center items-center gap-2 py-3 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg font-bold">
+                      {/* Mobile Credits Grid */}
+                      {userCredits && (
+                         <div className="grid grid-cols-3 gap-2 mb-2">
+                            <div className="bg-white/5 p-2 rounded text-center border border-white/5">
+                               <span className="block text-[10px] text-slate-500 uppercase tracking-wider">Int</span>
+                               <span className="text-emerald-400 font-bold text-sm">{userCredits.interviewCredits}</span>
+                            </div>
+                            <div className="bg-white/5 p-2 rounded text-center border border-white/5">
+                               <span className="block text-[10px] text-slate-500 uppercase tracking-wider">Cov</span>
+                               <span className="text-purple-400 font-bold text-sm">{userCredits.coverLetterCredits}</span>
+                            </div>
+                            <div className="bg-white/5 p-2 rounded text-center border border-white/5">
+                               <span className="block text-[10px] text-slate-500 uppercase tracking-wider">Map</span>
+                               <span className="text-cyan-400 font-bold text-sm">{userCredits.roadmapCredits}</span>
+                            </div>
+                         </div>
+                      )}
+                      
+                      <Link href="/dashboard/upgrade" onClick={() => setMobileMenuOpen(false)} className="flex justify-center items-center gap-2 py-3 bg-gradient-to-r from-amber-500/10 to-orange-500/10 text-amber-400 border border-amber-500/20 rounded-lg font-bold">
                          <Crown className="w-4 h-4" /> Upgrade Plan
                       </Link>
-                      <div className="flex justify-center mt-4"><UserButton /></div>
+                      
+                      {/* User Button Row */}
+                      <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/5 mt-2">
+                        <span className="text-sm text-slate-300 font-medium">Manage Account</span>
+                        <UserButton afterSignOutUrl="/" />
+                      </div>
                    </SignedIn>
+
                 </div>
              </div>
           </motion.div>
